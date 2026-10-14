@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.llimllib.netmon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>-s</string>
+    <string>/Users/llimllib/netmon/monitor.sh</string>
+    <string>deco=192.168.68.1</string>
+    <string>isp_gw=142.254.209.201</string>
+    <string>cf=1.1.1.1</string>
+    <string>google=8.8.8.8</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>/Users/llimllib/netmon/monitor.log</string>
+</dict>
+</plist>

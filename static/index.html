@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>netmon</title>
+<link rel="stylesheet" href="uPlot.min.css">
+<script src="uPlot.iife.min.js"></script>
+<style>
+  body { font: 13px -apple-system, BlinkMacSystemFont, sans-serif; background: #111217; color: #ccccdc; margin: 0; padding: 12px 16px; }
+  header { display: flex; gap: 6px; align-items: center; margin-bottom: 12px; }
+  header h1 { font-size: 16px; font-weight: 500; margin: 0 16px 0 0; }
+  header .status { margin-left: auto; color: #8e8e9e; }
+  button { background: #22252b; color: #ccccdc; border: 1px solid #34373d; border-radius: 3px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  button:hover { border-color: #5a5d63; }
+  button.on { border-color: #3d71d9; color: #fff; background: #1f2c45; }
+  button:disabled { opacity: .4; cursor: default; }
+  .panel { background: #181b1f; border: 1px solid #24272e; border-radius: 3px; padding: 8px 8px 0; margin-bottom: 10px; }
+  .panel h2 { font-size: 13px; font-weight: 500; margin: 0 0 4px; }
+  .host { font-size: 14px; font-weight: 500; margin: 18px 0 8px; color: #fff; }
+  .uplot .u-legend { font-size: 12px; }
+  .uplot .u-select { background: rgba(61, 113, 217, .2); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #24272e; }
+  th { color: #8e8e9e; font-weight: 500; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #22252b; }
+  .empty { color: #8e8e9e; padding: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>netmon</h1>
+  <span id="ranges"></span>
+  <button id="back" disabled>← zoom out</button>
+  <button id="auto" class="on">auto-refresh</button>
+  <span class="status" id="status"></span>
+</header>
+<div id="panels"></div>
+<div class="panel">
+  <h2>Outages (3s or longer; click one to zoom in)</h2>
+  <div id="outages"></div>
+</div>
+
+<script>
+const COLORS = { office: '#73bf69', hallway: '#fade2a', deco: '#5794f2', isp_gw: '#ff9830', cf: '#f2495c', google: '#b877d9', dns: '#8ab8ff' };
+const LABELS = { office: 'Office Deco', hallway: 'Hallway Deco', deco: 'Main Deco', isp_gw: 'Spectrum gw', cf: '1.1.1.1', google: '8.8.8.8', dns: 'DNS' };
+const HOSTS = { qfwfq: 'Mac mini (wired)', adama: 'Laptop (Wi-Fi via Office)' };
+const RANGES = [['15m', 900], ['1h', 3600], ['6h', 21600], ['24h', 86400], ['7d', 604800]];
+const HEIGHT = 200;
+
+// Either a relative range ({last: seconds}) that follows "now", or a fixed one
+let view = { last: 3600 };
+let shown = [0, 0];  // the range on screen; every chart's x axis uses it
+let history = [];
+let charts = [];
+let signature = null;
+let auto = true;
+
+const $ = id => document.getElementById(id);
+const fmtTime = t => new Date(t * 1000).toLocaleString();
+const fmtBucket = b => b < 60 ? `${b}s` : b < 3600 ? `${b / 60}m` : `${b / 3600}h`;
+
+function currentRange() {
+  if (view.last) {
+    const now = Date.now() / 1000;
+    return [now - view.last, now];
+  }
+  return [view.from, view.to];
+}
+
+function setView(v) {
+  history.push(view);
+  view = v;
+  load();
+}
+
+function axis(label, opts = {}) {
+  return {
+    label, stroke: '#8e8e9e', labelSize: 18, size: 50,
+    grid: { stroke: '#2a2d33', width: 1 }, ticks: { stroke: '#2a2d33', width: 1 },
+    ...opts,
+  };
+}
+
+function baseOpts(width) {
+  return {
+    width, height: HEIGHT,
+    scales: { x: { time: true, range: () => shown } },
+    cursor: { sync: { key: 'net' }, drag: { x: true, y: false, setScale: false } },
+    hooks: {
+      // Dragging across a chart zooms every chart to that range and fetches finer data
+      setSelect: [u => {
+        if (u.select.width < 5) return;
+        const from = u.posToVal(u.select.left, 'x');
+        const to = u.posToVal(u.select.left + u.select.width, 'x');
+        u.setSelect({ width: 0, height: 0 }, false);
+        setView({ from, to });
+      }],
+    },
+  };
+}
+
+function targetSeries(t, fmt, extra = {}) {
+  const color = COLORS[t] || '#aaa';
+  return { label: LABELS[t] || t, stroke: color, width: 1, value: (u, v) => v == null ? '–' : fmt(v), ...extra };
+}
+
+// Each panel is [title, uPlot options minus size, data]
+function panelsFor(host, h) {
+  const x = h.t;
+  const panels = [
+    [`${HOSTS[host] || host}: latency (log scale)`, {
+      scales: { ...baseOpts().scales, y: { distr: 3 } },
+      series: [{}, ...h.targets.map(t => targetSeries(t, v => v.toFixed(1) + ' ms'))],
+      axes: [axis(), axis('ms')],
+    }, [x, ...h.targets.map(t => h.latency[t])]],
+    [`${HOSTS[host] || host}: packet loss`, {
+      scales: { ...baseOpts().scales, y: { range: [0, 100] } },
+      series: [{}, ...h.targets.map(t => targetSeries(t, v => v.toFixed(0) + '%', {
+        fill: (COLORS[t] || '#aaaaaa') + '30',
+        paths: uPlot.paths.stepped({ align: 1 }),
+      }))],
+      axes: [axis(), axis('% lost')],
+    }, [x, ...h.targets.map(t => h.loss[t])]],
+  ];
+  if (h.wifi.rssi) {
+    panels.push([`${HOSTS[host] || host}: Wi-Fi`, {
+      scales: { ...baseOpts().scales, y: {}, rate: {} },
+      series: [{},
+        { label: 'signal', stroke: '#73bf69', width: 1, value: (u, v) => v == null ? '–' : v.toFixed(0) + ' dBm' },
+        { label: 'tx rate', stroke: '#8ab8ff', width: 1, scale: 'rate', value: (u, v) => v == null ? '–' : v.toFixed(0) + ' Mbps' }],
+      axes: [axis(), axis('dBm'), axis('Mbps', { side: 1, scale: 'rate', grid: { show: false } })],
+    }, [x, h.wifi.rssi, h.wifi.tx_rate]]);
+  }
+  return panels;
+}
+
+function hostOrder(hosts) {
+  const known = Object.keys(HOSTS);
+  return Object.keys(hosts).sort((a, b) =>
+    ((known.indexOf(a) + 1) || 99) - ((known.indexOf(b) + 1) || 99) || a.localeCompare(b));
+}
+
+function render(data) {
+  const hosts = hostOrder(data.hosts);
+  const all = hosts.map(host => [host, panelsFor(host, data.hosts[host])]);
+  const sig = JSON.stringify(all.map(([host, ps]) => [host, ps.map(p => p[0] + p[1].series.length)]));
+
+  // Same panels as last time: update in place so the cursor and legend stay put
+  if (sig === signature) {
+    all.flatMap(([, ps]) => ps).forEach((p, i) => charts[i].setData(p[2]));
+    return;
+  }
+
+  charts.forEach(u => u.destroy());
+  charts = [];
+  signature = sig;
+  const root = $('panels');
+  root.innerHTML = hosts.length ? '' : '<div class="empty">No data in this range.</div>';
+  for (const [host, panels] of all) {
+    const h = document.createElement('div');
+    h.className = 'host';
+    h.textContent = HOSTS[host] || host;
+    root.append(h);
+    for (const [title, opts, d] of panels) {
+      const div = document.createElement('div');
+      div.className = 'panel';
+      div.innerHTML = `<h2>${title}</h2>`;
+      root.append(div);
+      charts.push(new uPlot({ ...baseOpts(div.clientWidth - 16), ...opts }, d, div));
+    }
+  }
+}
+
+function renderOutages(rows) {
+  if (!rows.length) {
+    $('outages').innerHTML = '<div class="empty">None yet.</div>';
+    return;
+  }
+  const body = rows.map(o => `
+    <tr data-from="${o.start - 120}" data-to="${o.end + 120}">
+      <td>${fmtTime(o.start)}</td><td>${HOSTS[o.host] || o.host}</td>
+      <td>${Math.round(o.end - o.start + 1)}s</td><td>${o.bad_secs}</td>
+      <td>${o.first_failed.join(', ')}</td><td>${o.diagnosis}</td>
+      <td>${o.other_hosts || '–'}</td>
+    </tr>`).join('');
+  $('outages').innerHTML = `<table>
+    <thead><tr><th>start</th><th>monitor</th><th>duration</th><th>bad secs</th>
+      <th>failed first</th><th>diagnosis</th><th>other monitors</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
+  $('outages').querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => {
+    setView({ from: +tr.dataset.from, to: +tr.dataset.to });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+async function load() {
+  const [from, to] = currentRange();
+  updateControls();
+  try {
+    const [data, outages] = await Promise.all([
+      fetch(`/api/data?from=${Math.floor(from)}&to=${Math.ceil(to)}`).then(r => r.json()),
+      fetch('/api/outages').then(r => r.json()),
+    ]);
+    shown = [from, to];
+    render(data);
+    renderOutages(outages);
+    $('status').textContent =
+      `${fmtTime(from)} → ${fmtTime(to)} · each point = ${fmtBucket(data.bucket)} · updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    $('status').textContent = `error: ${e}`;
+  }
+}
+
+function updateControls() {
+  $('ranges').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.secs === view.last));
+  $('back').disabled = !history.length;
+  $('auto').classList.toggle('on', auto);
+}
+
+for (const [label, secs] of RANGES) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.dataset.secs = secs;
+  b.onclick = () => setView({ last: secs });
+  $('ranges').append(b);
+}
+$('back').onclick = () => { view = history.pop(); load(); };
+$('auto').onclick = () => { auto = !auto; updateControls(); };
+
+// Auto-refresh only makes sense when the range follows "now"
+setInterval(() => { if (auto && view.last) load(); }, 10000);
+window.addEventListener('resize', () => charts.forEach(u =>
+  u.setSize({ width: u.root.parentElement.clientWidth - 16, height: HEIGHT })));
+
+load();
+</script>
+</body>
+</html>
