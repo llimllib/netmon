@@ -9,19 +9,35 @@
 # what each machine runs.
 set -euo pipefail
 cd ${0:A:h}
-
-GRAFANA=http://qfwfq.local:3000
-KEYCHAIN_SERVICE=netmon-grafana
+source grafana/lib.sh
 
 deploy_qfwfq() {
   if [[ -n $(git status --porcelain) ]]; then
     echo "uncommitted changes; commit them before deploying to qfwfq" >&2
     exit 1
   fi
+  check_dashboard_edits
   echo "== qfwfq: deploying $(git rev-parse --short HEAD)"
   git archive HEAD | ssh qfwfq.local 'mkdir -p ~/netmon && tar -x -C ~/netmon'
   ssh qfwfq.local "echo $(git rev-parse HEAD) > ~/netmon/DEPLOYED && zsh ~/netmon/deploy/qfwfq.sh"
   set_grafana_password
+}
+
+# Deploying replaces dashboards with the repo's copies, which would lose
+# edits saved in Grafana's UI since the last deploy that weren't pulled.
+check_dashboard_edits() {
+  # Nothing to lose before Grafana's first deploy
+  security find-generic-password -s $KEYCHAIN_SERVICE &>/dev/null || return 0
+  local f uid
+  for f in $DASHBOARDS/*.json; do
+    uid=$(jq -r .uid $f)
+    if ! cmp -s <(grafana_dashboard $uid | jq -S .) \
+        <(ssh qfwfq.local cat netmon/grafana/dashboards/${f:t} | jq -S 'del(.id, .version)'); then
+      echo "dashboard $uid was edited in Grafana since the last deploy;" \
+        "run grafana/pull.sh and commit first" >&2
+      exit 1
+    fi
+  done
 }
 
 # Grafana starts with admin/admin. The first deploy replaces that with a

@@ -25,6 +25,13 @@ FROM (
                 filename = true)
 );
 
+-- What to call each host on the dashboard
+CREATE OR REPLACE VIEW host_names AS
+SELECT * FROM (VALUES
+  ('qfwfq', 'Living room Mac mini (wired)'),
+  ('adama', 'Laptop (Wi-Fi via Office)')
+) t(host, name);
+
 -- Each host's columns, from its files. Parquet schemas and CSV headers are
 -- cheap to read, unlike the rows.
 CREATE OR REPLACE VIEW host_columns AS

@@ -96,9 +96,11 @@ It's all set up from `grafana/` by `deploy/qfwfq.sh`:
 - The data source is the [DuckDB plugin][plugin], pinned in
   `deploy/qfwfq.sh`. Its DuckDB has to match `mise.toml`'s. It loads
   `views.sql`, so panels can query `pings`, `results`, `report` and so on.
-- `dashboards/netmon.json` is the dashboard. Changes made in the UI can't be
-  saved; export the JSON (Share → Export) into that file, commit and deploy.
-  The plugin quotes variables itself: write `host = $host`, not `'$host'`.
+- `dashboards/netmon.json` is the dashboard. To change it, sign in as admin,
+  edit and save in the UI, then run `grafana/pull.sh` on the laptop and
+  commit. `deploy.sh` refuses to deploy over saved edits that haven't been
+  pulled. The plugin quotes variables itself: write `host = $host`, not
+  `'$host'`. Hosts' display names are in `host_names` in `views.sql`.
 
 [plugin]: https://github.com/motherduckdb/grafana-duckdb-datasource
 
