@@ -68,12 +68,16 @@ launchctl bootout gui/$(id -u)/<label>        # stop until the next deploy
 - **adama** (laptop, Wi-Fi via the Office Deco): runs without `caffeinate`,
   so sleep leaves gaps in the
   log. `AC_ONLY` makes it skip rows while on battery, so it only records while
-  plugged in. It also pings the Office (192.168.71.249) and Hallway (192.168.71.250)
-  nodes. It adds Wi-Fi columns from `wifistat` (built with
+  plugged in. It also pings the Office (192.168.71.250) and Hallway (192.168.71.249)
+  nodes. The two look identical; the Deco's device list says Office
+  (`EC-75-0C-C9-D6-65`) connects through Hallway (`EC-75-0C-C9-D6-6F`).
+  Until 2026-10-23 the monitor had their addresses swapped; the recorded
+  data was relabeled to match. It adds Wi-Fi columns from `wifistat` (built with
   `swiftc -O wifistat.swift -o wifistat`). `HOME_GW` makes it skip rows
   while the laptop is on another network.
 
-  Ping times show the mesh path. Normally Office < Hallway < main. If
+  Ping times show the mesh path. The node the laptop is connected to
+  answers fastest, so in the office it's normally Office < Hallway < main. If
   `hallway_ms` becomes larger than `deco_ms`, Office is probably connecting
   straight to the main Deco.
 

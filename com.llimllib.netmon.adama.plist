@@ -7,8 +7,8 @@
   <key>ProgramArguments</key>
   <array>
     <string>/Users/llimllib/netmon/monitor.sh</string>
-    <string>office=192.168.71.249</string>
-    <string>hallway=192.168.71.250</string>
+    <string>office=192.168.71.250</string>
+    <string>hallway=192.168.71.249</string>
     <string>deco=192.168.68.1</string>
     <string>isp_gw=142.254.209.201</string>
     <string>cf=1.1.1.1</string>
