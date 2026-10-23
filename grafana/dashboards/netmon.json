@@ -1,118 +1,35 @@
 {
-  "uid": "netmon",
-  "title": "netmon",
-  "tags": [
-    "netmon"
-  ],
-  "timezone": "browser",
-  "editable": true,
-  "refresh": "30s",
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
-  "schemaVersion": 39,
   "annotations": {
     "list": [
       {
-        "name": "Outages",
         "datasource": {
           "type": "motherduck-duckdb-datasource",
           "uid": "netmon"
         },
         "enable": true,
         "iconColor": "red",
+        "name": "Outages",
         "target": {
-          "refId": "Anno",
           "datasource": {
             "type": "motherduck-duckdb-datasource",
             "uid": "netmon"
           },
-          "rawSql": "SELECT start_ts AS time, end_ts AS timeend, host || ': ' || diagnosis AS text\nFROM report\nWHERE $__timeFilter(start_ts)",
-          "format": 1,
           "editorMode": "code",
-          "rawQuery": true
+          "format": 1,
+          "rawQuery": true,
+          "rawSql": "SELECT start_ts AS time, end_ts AS timeend, host || ': ' || diagnosis AS text\nFROM report\nWHERE $__timeFilter(start_ts)",
+          "refId": "Anno"
         }
       }
     ]
   },
-  "templating": {
-    "list": [
-      {
-        "name": "host",
-        "type": "query",
-        "datasource": {
-          "type": "motherduck-duckdb-datasource",
-          "uid": "netmon"
-        },
-        "query": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns) LEFT JOIN host_names USING (host)",
-        "definition": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns) LEFT JOIN host_names USING (host)",
-        "refresh": 1,
-        "multi": true,
-        "includeAll": true,
-        "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "hide": 0,
-        "sort": 1
-      },
-      {
-        "name": "wifi_host",
-        "type": "query",
-        "datasource": {
-          "type": "motherduck-duckdb-datasource",
-          "uid": "netmon"
-        },
-        "query": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns WHERE col = 'rssi') LEFT JOIN host_names USING (host)",
-        "definition": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns WHERE col = 'rssi') LEFT JOIN host_names USING (host)",
-        "refresh": 1,
-        "multi": true,
-        "includeAll": true,
-        "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "hide": 2,
-        "sort": 1
-      }
-    ]
-  },
+  "editable": true,
   "panels": [
     {
-      "type": "table",
-      "title": "Outages (3s or longer; click a start time to zoom in)",
       "datasource": {
         "type": "motherduck-duckdb-datasource",
         "uid": "netmon"
       },
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "motherduck-duckdb-datasource",
-            "uid": "netmon"
-          },
-          "rawSql": "-- zoom_from and zoom_to are hidden, and used by the link to zoom in\nSELECT start_ts AS start, coalesce(name, host) AS host, diagnosis, epoch(duration) AS duration,\n       bad_secs AS \"bad seconds\",\n       array_to_string(first_failed, ', ') AS \"first failed\",\n       array_to_string(all_failed, ', ') AS \"all failed\",\n       other_hosts AS \"other monitors saw\",\n       epoch_ms(start_ts) - 60000 AS zoom_from,\n       epoch_ms(end_ts) + 60000 AS zoom_to\nFROM report LEFT JOIN host_names USING (host)\nWHERE $__timeFilter(start_ts)\nORDER BY start_ts DESC",
-          "format": 1,
-          "editorMode": "code",
-          "rawQuery": true
-        }
-      ],
       "fieldConfig": {
         "defaults": {},
         "overrides": [
@@ -159,69 +76,76 @@
           }
         ]
       },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
       },
-      "id": 1
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 1,
+          "rawQuery": true,
+          "rawSql": "-- zoom_from and zoom_to are hidden, and used by the link to zoom in\nSELECT start_ts AS start, coalesce(name, host) AS host, diagnosis, epoch(duration) AS duration,\n       bad_secs AS \"bad seconds\",\n       array_to_string(first_failed, ', ') AS \"first failed\",\n       array_to_string(all_failed, ', ') AS \"all failed\",\n       other_hosts AS \"other monitors saw\",\n       epoch_ms(start_ts) - 60000 AS zoom_from,\n       epoch_ms(end_ts) + 60000 AS zoom_to\nFROM report LEFT JOIN host_names USING (host)\nWHERE $__timeFilter(start_ts)\nORDER BY start_ts DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Outages (3s or longer; click a start time to zoom in)",
+      "type": "table"
     },
     {
-      "type": "row",
-      "title": "${host:text}",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
+      "panels": [],
       "repeat": "host",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 2
+      "title": "${host:text}",
+      "type": "row"
     },
     {
-      "type": "timeseries",
-      "title": "${host:text}: latency (log scale)",
       "datasource": {
         "type": "motherduck-duckdb-datasource",
         "uid": "netmon"
       },
-      "gridPos": {
-        "x": 0,
-        "y": 9,
-        "w": 12,
-        "h": 9
-      },
-      "interval": "1s",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "motherduck-duckdb-datasource",
-            "uid": "netmon"
-          },
-          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, avg(ms) AS value\n  FROM results\n  WHERE host = $host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = $host)\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
-          "format": 0,
-          "editorMode": "code",
-          "rawQuery": true
-        }
-      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
           "custom": {
-            "lineWidth": 1,
             "fillOpacity": 0,
-            "spanNulls": false,
+            "lineWidth": 1,
             "scaleDistribution": {
-              "type": "log",
-              "log": 10
-            }
+              "log": 10,
+              "type": "log"
+            },
+            "spanNulls": false
           },
-          "displayName": "${__field.labels.target}"
+          "displayName": "${__field.labels.target}",
+          "unit": "ms"
         },
         "overrides": []
       },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 3,
+      "interval": "1s",
       "options": {
         "legend": {
           "displayMode": "list",
@@ -232,50 +156,50 @@
           "sort": "none"
         }
       },
-      "id": 3
-    },
-    {
-      "type": "timeseries",
-      "title": "${host:text}: packet loss",
-      "datasource": {
-        "type": "motherduck-duckdb-datasource",
-        "uid": "netmon"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 9,
-        "w": 12,
-        "h": 9
-      },
-      "interval": "1s",
       "targets": [
         {
-          "refId": "A",
           "datasource": {
             "type": "motherduck-duckdb-datasource",
             "uid": "netmon"
           },
-          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, 100 * avg((ms IS NULL)::int) AS value\n  FROM results\n  WHERE host = $host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = $host)\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
-          "format": 0,
           "editorMode": "code",
-          "rawQuery": true
+          "format": 0,
+          "rawQuery": true,
+          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, avg(ms) AS value\n  FROM results\n  WHERE host = $host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = $host)\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
+          "refId": "A"
         }
       ],
+      "title": "${host:text}: latency (log scale)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
           "custom": {
-            "lineWidth": 1,
             "fillOpacity": 20,
-            "spanNulls": false,
-            "lineInterpolation": "stepAfter"
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "spanNulls": false
           },
-          "min": 0,
+          "displayName": "${__field.labels.target}",
           "max": 100,
-          "displayName": "${__field.labels.target}"
+          "min": 0,
+          "unit": "percent"
         },
         "overrides": []
       },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 4,
+      "interval": "1s",
       "options": {
         "legend": {
           "displayMode": "list",
@@ -286,57 +210,49 @@
           "sort": "none"
         }
       },
-      "id": 4
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 0,
+          "rawQuery": true,
+          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, 100 * avg((ms IS NULL)::int) AS value\n  FROM results\n  WHERE host = $host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = $host)\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "${host:text}: packet loss",
+      "type": "timeseries"
     },
     {
-      "type": "row",
-      "title": "${wifi_host:text}: Wi-Fi",
-      "repeat": "wifi_host",
       "collapsed": false,
       "gridPos": {
-        "x": 0,
-        "y": 18,
+        "h": 1,
         "w": 24,
-        "h": 1
+        "x": 0,
+        "y": 18
       },
+      "id": 5,
       "panels": [],
-      "id": 5
+      "repeat": "wifi_host",
+      "title": "${wifi_host:text}: Wi-Fi",
+      "type": "row"
     },
     {
-      "type": "timeseries",
-      "title": "${wifi_host:text}: Wi-Fi",
       "datasource": {
         "type": "motherduck-duckdb-datasource",
         "uid": "netmon"
       },
-      "gridPos": {
-        "x": 0,
-        "y": 19,
-        "w": 24,
-        "h": 9
-      },
-      "interval": "1s",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "motherduck-duckdb-datasource",
-            "uid": "netmon"
-          },
-          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, avg(rssi) AS signal, avg(tx_rate) AS \"tx rate\"\n  FROM pings\n  WHERE host = $wifi_host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, signal, \"tx rate\"\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time",
-          "format": 0,
-          "editorMode": "code",
-          "rawQuery": true
-        }
-      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "dBm",
           "custom": {
-            "lineWidth": 1,
             "fillOpacity": 0,
+            "lineWidth": 1,
             "spanNulls": false
-          }
+          },
+          "unit": "dBm"
         },
         "overrides": [
           {
@@ -357,6 +273,14 @@
           }
         ]
       },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "id": 6,
+      "interval": "1s",
       "options": {
         "legend": {
           "displayMode": "list",
@@ -367,7 +291,83 @@
           "sort": "none"
         }
       },
-      "id": 6
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 0,
+          "rawQuery": true,
+          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, avg(rssi) AS signal, avg(tx_rate) AS \"tx rate\"\n  FROM pings\n  WHERE host = $wifi_host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, signal, \"tx rate\"\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "${wifi_host:text}: Wi-Fi",
+      "type": "timeseries"
     }
-  ]
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "netmon"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "motherduck-duckdb-datasource",
+          "uid": "netmon"
+        },
+        "definition": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns) LEFT JOIN host_names USING (host)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "host",
+        "query": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns) LEFT JOIN host_names USING (host)",
+        "refresh": 1,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "motherduck-duckdb-datasource",
+          "uid": "netmon"
+        },
+        "definition": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns WHERE col = 'rssi') LEFT JOIN host_names USING (host)",
+        "hide": 2,
+        "includeAll": true,
+        "multi": true,
+        "name": "wifi_host",
+        "query": "SELECT host AS __value, coalesce(name, host) AS __text\nFROM (SELECT DISTINCT host FROM host_columns WHERE col = 'rssi') LEFT JOIN host_names USING (host)",
+        "refresh": 1,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "netmon",
+  "uid": "netmon"
 }
