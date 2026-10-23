@@ -200,7 +200,7 @@
             "type": "motherduck-duckdb-datasource",
             "uid": "netmon"
           },
-          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, avg(ms) AS value\n  FROM results\n  WHERE host = '$host' AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = '$host')\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
+          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, avg(ms) AS value\n  FROM results\n  WHERE host = $host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = $host)\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
           "format": 0,
           "editorMode": "code",
           "rawQuery": true
@@ -255,7 +255,7 @@
             "type": "motherduck-duckdb-datasource",
             "uid": "netmon"
           },
-          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, 100 * avg((ms IS NULL)::int) AS value\n  FROM results\n  WHERE host = '$host' AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = '$host')\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
+          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, 100 * avg((ms IS NULL)::int) AS value\n  FROM results\n  WHERE host = $host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = $host)\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
           "format": 0,
           "editorMode": "code",
           "rawQuery": true
@@ -323,7 +323,7 @@
             "type": "motherduck-duckdb-datasource",
             "uid": "netmon"
           },
-          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, avg(rssi) AS signal, avg(tx_rate) AS \"tx rate\"\n  FROM pings\n  WHERE host = '$wifi_host' AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, signal, \"tx rate\"\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time",
+          "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, avg(rssi) AS signal, avg(tx_rate) AS \"tx rate\"\n  FROM pings\n  WHERE host = $wifi_host AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, signal, \"tx rate\"\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time",
           "format": 0,
           "editorMode": "code",
           "rawQuery": true
