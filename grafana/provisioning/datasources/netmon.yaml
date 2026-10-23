@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: netmon
+    uid: netmon
+    type: motherduck-duckdb-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      # In-memory, with views over ~/netmon/data defined by views.sql
+      path: ''
+      initSql: $__file{/Users/llimllib/netmon/views.sql}
+      # Grafana doesn't pass HOME to plugins, and views.sql's paths start
+      # with ~
+      homeDirectory: /Users/llimllib

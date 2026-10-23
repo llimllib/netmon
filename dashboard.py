@@ -135,12 +135,12 @@ def get_data(start, end):
 
 
 def get_outages():
-    # outages.sql reads both *.csv and *.parquet, and DuckDB errors on a glob
+    # views.sql reads both *.csv and *.parquet, and DuckDB errors on a glob
     # that matches nothing
     if not (any(DATA.glob("*.csv")) and any(DATA.glob("*.parquet"))):
         return []
     con = duckdb.connect()
-    con.execute((ROOT / "outages.sql").read_text())
+    con.execute((ROOT / "views.sql").read_text())
     cur = con.execute("""
         SELECT host, epoch(start_ts) AS start, epoch(end_ts) AS "end",
                bad_secs, first_failed, all_failed, diagnosis, other_hosts

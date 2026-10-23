@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: netmon
+    type: file
+    # Edits made in the UI can't be saved; export the JSON into
+    # grafana/dashboards/ and deploy instead
+    allowUiUpdates: false
+    options:
+      path: /Users/llimllib/netmon/grafana/dashboards
