@@ -2,3 +2,4 @@ data/
 monitor.log
 wifistat
 __pycache__/
+dashboard.log

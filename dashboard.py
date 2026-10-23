@@ -179,5 +179,5 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     threading.Thread(target=sync_loop, daemon=True).start()
     handler = partial(Handler, directory=str(ROOT / "static"))
-    print(f"http://localhost:{PORT}")
+    print(f"http://localhost:{PORT}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", PORT), handler).serve_forever()

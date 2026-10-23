@@ -69,9 +69,19 @@ it, `isp_gw` will fail constantly. Update the plists if that happens.
 
 ## Dashboard
 
+On the laptop it runs as a LaunchAgent at http://localhost:8766, logging to
+`~/netmon/dashboard.log`:
+
 ```
-~/netmon/dashboard.py     # then open http://localhost:8766
+cp com.llimllib.netmon.dashboard.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.llimllib.netmon.dashboard.plist
+
+launchctl kickstart -k gui/$(id -u)/com.llimllib.netmon.dashboard   # restart
+launchctl bootout gui/$(id -u)/com.llimllib.netmon.dashboard        # stop
 ```
+
+Restart it after changing `dashboard.py`; changes to `static/` and
+`outages.sql` are picked up on the next page load or refresh.
 
 It shows latency, packet loss and the laptop's Wi-Fi stats for each monitor,
 plus a list of outages. Drag across a chart to zoom in, and click an outage to
