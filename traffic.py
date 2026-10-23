@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = "==3.13.*"
-# dependencies = ["cryptography", "duckdb==1.5.6", "requests"]
+# dependencies = ["cryptography", "duckdb==1.5.6"]
 # [tool.uv]
 # # duckdb 1.5.6 has no wheels for newer Pythons, and takes minutes to build
 # no-build-package = ["duckdb"]
@@ -33,13 +33,13 @@ import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
 import duckdb
-import requests
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.asymmetric import padding as rsa_padding
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -76,6 +76,21 @@ class Deco:
         self.base = f"http://{host}/cgi-bin/luci/;stok="
         self.password = password
         self.stok = None
+        self.cookies = Path(tempfile.mkdtemp(prefix="netmon-traffic")) / "cookies"
+
+    def _curl(self, url, body, content_type):
+        # Under launchd, macOS's Local Network privacy blocks Python from
+        # reaching the Deco until it's allowed in System Settings, and
+        # again after uv updates Python. Apple's curl is exempt.
+        r = subprocess.run(
+            ["/usr/bin/curl", "-sS", "--fail", "-m", "5",
+             "-b", self.cookies, "-c", self.cookies,
+             "-H", f"Content-Type: {content_type}", "--data-binary", "@-", url],
+            input=body, capture_output=True, text=True,
+        )
+        if r.returncode:
+            raise RuntimeError(r.stderr.strip())
+        return json.loads(r.stdout)
 
     def _aes(self):
         return Cipher(algorithms.AES(self.key.encode()), modes.CBC(self.iv.encode()))
@@ -92,9 +107,8 @@ class Deco:
         return u.update(d.update(base64.b64decode(data)) + d.finalize()) + u.finalize()
 
     def _post_plain(self, path):
-        r = self.session.post(self.base + path, json={"operation": "read"}, timeout=5)
-        r.raise_for_status()
-        return r.json()["result"]
+        return self._curl(self.base + path, '{"operation": "read"}',
+                          "application/json")["result"]
 
     def _post(self, path, body, login=False):
         data = self._encrypt(json.dumps(body).encode())
@@ -103,17 +117,15 @@ class Deco:
             sign = f"k={self.key}&i={self.iv}&" + sign
         # Form-encoded, but labeled as JSON like the web UI's requests. The
         # Deco rejects the same body labeled as a form.
-        r = self.session.post(
+        res = self._curl(
             f"{self.base}{self.stok or ''}{path}",
-            data=f"sign={rsa_encrypt(self.sign_key, sign.encode())}&data={quote(data, safe='')}",
-            headers={"Content-Type": "application/json; charset=UTF-8"},
-            timeout=5,
+            f"sign={rsa_encrypt(self.sign_key, sign.encode())}&data={quote(data, safe='')}",
+            "application/json; charset=UTF-8",
         )
-        r.raise_for_status()
-        return json.loads(self._decrypt(r.json()["data"]))
+        return json.loads(self._decrypt(res["data"]))
 
     def login(self):
-        self.session = requests.Session()
+        self.cookies.unlink(missing_ok=True)
         self.stok = None
         password_key = self._post_plain("/login?form=keys")["password"]
         auth = self._post_plain("/login?form=auth")
