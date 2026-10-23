@@ -76,7 +76,11 @@ SELECT host,
        arg_min(failed, ts) AS first_failed,
        list_sort(list_distinct(flatten(list(failed)))) AS all_failed
 FROM numbered
-GROUP BY host, n;
+GROUP BY host, n
+-- The laptop reaches everything else through the satellite Decos, so if
+-- only they failed, the path through them still worked; they just didn't
+-- answer pings to their own addresses
+HAVING NOT list_has_all(['hallway', 'office'], all_failed);
 
 CREATE OR REPLACE VIEW report AS
 SELECT o.host,
