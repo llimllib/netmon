@@ -29,7 +29,7 @@
             "uid": "netmon"
           },
           "rawSql": "SELECT start_ts AS time, end_ts AS timeend, host || ': ' || diagnosis AS text\nFROM report\nWHERE $__timeFilter(start_ts)",
-          "format": "table",
+          "format": 1,
           "editorMode": "code",
           "rawQuery": true
         }
@@ -108,7 +108,7 @@
             "uid": "netmon"
           },
           "rawSql": "-- zoom_from and zoom_to are hidden, and used by the link to zoom in\nSELECT start_ts AS start, host, diagnosis, epoch(duration) AS duration,\n       bad_secs AS \"bad seconds\",\n       array_to_string(first_failed, ', ') AS \"first failed\",\n       array_to_string(all_failed, ', ') AS \"all failed\",\n       other_hosts AS \"other monitors saw\",\n       epoch_ms(start_ts) - 60000 AS zoom_from,\n       epoch_ms(end_ts) + 60000 AS zoom_to\nFROM report\nWHERE $__timeFilter(start_ts)\nORDER BY start_ts DESC",
-          "format": "table",
+          "format": 1,
           "editorMode": "code",
           "rawQuery": true
         }
@@ -201,7 +201,7 @@
             "uid": "netmon"
           },
           "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, avg(ms) AS value\n  FROM results\n  WHERE host = '$host' AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = '$host')\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
-          "format": "time_series",
+          "format": 0,
           "editorMode": "code",
           "rawQuery": true
         }
@@ -256,7 +256,7 @@
             "uid": "netmon"
           },
           "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, target, 100 * avg((ms IS NULL)::int) AS value\n  FROM results\n  WHERE host = '$host' AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, target, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT target FROM host_targets WHERE host = '$host')\nLEFT JOIN buckets USING (time, target)\nORDER BY time",
-          "format": "time_series",
+          "format": 0,
           "editorMode": "code",
           "rawQuery": true
         }
@@ -324,7 +324,7 @@
             "uid": "netmon"
           },
           "rawSql": "WITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, avg(rssi) AS signal, avg(tx_rate) AS \"tx rate\"\n  FROM pings\n  WHERE host = '$wifi_host' AND $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, signal, \"tx rate\"\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time",
-          "format": "time_series",
+          "format": 0,
           "editorMode": "code",
           "rawQuery": true
         }
