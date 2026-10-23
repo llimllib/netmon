@@ -228,8 +228,14 @@ for (const [label, secs] of RANGES) {
 $('back').onclick = () => { view = history.pop(); load(); };
 $('auto').onclick = () => { auto = !auto; updateControls(); };
 
-// Auto-refresh only makes sense when the range follows "now"
-setInterval(() => { if (auto && view.last) load(); }, 10000);
+// Auto-refresh only makes sense when the range follows "now". Skip a tick
+// if the last load hasn't finished, so slow requests don't pile up.
+let loading = null;
+setInterval(async () => {
+  if (!auto || !view.last || loading) return;
+  loading = load();
+  try { await loading; } finally { loading = null; }
+}, 10000);
 window.addEventListener('resize', () => charts.forEach(u =>
   u.setSize({ width: u.root.parentElement.clientWidth - 16, height: HEIGHT })));
 

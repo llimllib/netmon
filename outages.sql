@@ -5,8 +5,12 @@
 -- A second is "bad" if any target failed to reply. Bad seconds less than
 -- 5s apart are merged into one outage. Outages with fewer than 3 bad
 -- seconds are dropped as noise; change the 3 at the bottom to see them.
+--
+-- pings, bad_seconds and outages are tables rather than views because
+-- they're referenced more than once; as views, every reference re-read
+-- and re-unpivoted all the CSVs.
 
-CREATE OR REPLACE TEMP VIEW pings AS
+CREATE OR REPLACE TEMP TABLE pings AS
 SELECT regexp_extract(filename, '([^/]+)-\d{4}-\d{2}-\d{2}\.csv$', 1) AS host,
        * EXCLUDE (filename)
 FROM read_csv('~/netmon/data/*.csv', union_by_name = true, filename = true,
@@ -19,7 +23,7 @@ SELECT host, ts, replace(target, '_ms', '') AS target, nullif(ms, -1) AS ms
 FROM (UNPIVOT (SELECT host, ts, coalesce(COLUMNS('_ms$'), -1) FROM pings)
       ON COLUMNS('_ms$') INTO NAME target VALUE ms);
 
-CREATE OR REPLACE TEMP VIEW bad_seconds AS
+CREATE OR REPLACE TEMP TABLE bad_seconds AS
 SELECT host, ts, list(target ORDER BY target) AS failed
 FROM results
 WHERE ms IS NULL
@@ -27,7 +31,7 @@ WHERE ms IS NULL
   AND (host, target) IN (SELECT host, target FROM results WHERE ms IS NOT NULL)
 GROUP BY host, ts;
 
-CREATE OR REPLACE TEMP VIEW outages AS
+CREATE OR REPLACE TEMP TABLE outages AS
 WITH marked AS (
   SELECT *,
          coalesce(ts - lag(ts) OVER w > INTERVAL 5 SECOND, true) AS is_start

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["duckdb"]
+# dependencies = ["duckdb==1.5.6"]
 # ///
 """Serve a dashboard of the netmon CSVs at http://localhost:8766
 (set NETMON_PORT to use another port)
