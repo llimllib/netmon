@@ -18,6 +18,8 @@
   <dict>
     <key>HOME_GW</key>
     <string>192.168.68.1</string>
+    <key>AC_ONLY</key>
+    <string>1</string>
     <key>WIFISTAT</key>
     <string>/Users/llimllib/netmon/wifistat</string>
   </dict>

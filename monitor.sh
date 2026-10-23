@@ -12,6 +12,7 @@
 # Optional environment:
 #   HOME_GW   skip rows while the default gateway is some other address
 #             (i.e. the laptop is on another network)
+#   AC_ONLY   if set, skip rows while running on battery
 #   WIFISTAT  path to the wifistat binary; adds rssi,noise,channel,band,
 #             width,tx_rate columns
 #   KEEP_DAYS delete data older than this many days (default 30)
@@ -46,6 +47,13 @@ pace() {
 
 while true; do
   start=$EPOCHREALTIME
+
+  # Don't drain the battery. Unplugged, check again every 30s rather than
+  # every second
+  if [[ -n $AC_ONLY && $(pmset -g ps) == *"'Battery Power'"* ]]; then
+    sleep 30
+    continue
+  fi
 
   # No default route counts as an outage, but a different gateway means
   # we're on someone else's network

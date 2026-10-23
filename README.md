@@ -51,7 +51,8 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.llimllib.netmon.plis
 
 - **adama** (laptop, Wi-Fi via the Office Deco): runs without `caffeinate`,
   so sleep leaves gaps in the
-  log. It also pings the Office (192.168.71.249) and Hallway (192.168.71.250)
+  log. `AC_ONLY` makes it skip rows while on battery, so it only records while
+  plugged in. It also pings the Office (192.168.71.249) and Hallway (192.168.71.250)
   nodes. It adds Wi-Fi columns from `wifistat` (built with
   `swiftc -O wifistat.swift -o wifistat`). `HOME_GW` makes it skip rows
   while the laptop is on another network.
