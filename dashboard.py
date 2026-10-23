@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["duckdb==1.5.6"]
 # ///
-"""Serve a dashboard of the netmon CSVs at http://localhost:8766
+"""Serve a dashboard of the netmon data at http://localhost:8766
 (set NETMON_PORT to use another port)
 
 Every 30s it rsyncs the Mac mini's data into ./data, so the charts stay
@@ -26,7 +26,8 @@ import duckdb
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
-REMOTE = "qfwfq.local:netmon/data/"
+REMOTE_HOST = "qfwfq"
+REMOTE = f"{REMOTE_HOST}.local:netmon/data/"
 PORT = int(os.environ.get("NETMON_PORT", 8766))
 MAX_POINTS = 1500
 BUCKETS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200]
@@ -34,8 +35,13 @@ BUCKETS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200]
 
 def sync_loop():
     while True:
+        # Mirror only the Mac mini's files, deleting ones it has removed (CSVs
+        # it has converted to Parquet, or expired data), and skip *.tmp files
+        # from a conversion in progress
         r = subprocess.run(
-            ["rsync", "-a", "--timeout=10", REMOTE, f"{DATA}/"],
+            ["rsync", "-a", "--delete", "--timeout=10",
+             f"--include={REMOTE_HOST}-*.csv", f"--include={REMOTE_HOST}-*.parquet",
+             "--exclude=*", REMOTE, f"{DATA}/"],
             capture_output=True,
             text=True,
         )
@@ -50,12 +56,12 @@ def bucket_for(span):
 
 
 def host_files(start, end):
-    """Map host -> CSV files that may have rows between start and end"""
+    """Map host -> data files that may have rows between start and end"""
     first = datetime.fromtimestamp(start).date() - timedelta(days=1)
     last = datetime.fromtimestamp(end).date() + timedelta(days=1)
     hosts = {}
-    for f in sorted(DATA.glob("*.csv")):
-        m = re.fullmatch(r"(.+)-(\d{4}-\d{2}-\d{2})\.csv", f.name)
+    for f in sorted(DATA.glob("*-*")):
+        m = re.fullmatch(r"(.+)-(\d{4}-\d{2}-\d{2})\.(csv|parquet)", f.name)
         if m and first <= date.fromisoformat(m[2]) <= last:
             hosts.setdefault(m[1], []).append(str(f))
     return hosts
@@ -65,22 +71,33 @@ def sql_str(s):
     return "'" + s.replace("'", "''") + "'"
 
 
+def read_files(files):
+    """SQL reading CSV and Parquet files with the same column types.
+    Matches to_parquet.sh: every column but ts is a DOUBLE."""
+    file_list = lambda fs: "[" + ", ".join(map(sql_str, fs)) + "]"
+    pq = [f for f in files if f.endswith(".parquet")]
+    csv = [f for f in files if f.endswith(".csv")]
+    parts = []
+    if pq:
+        parts.append(f"SELECT * FROM read_parquet({file_list(pq)}, union_by_name = true)")
+    if csv:
+        parts.append(f"""
+            SELECT ts::TIMESTAMPTZ AS ts, COLUMNS(* EXCLUDE (ts))::DOUBLE
+            FROM read_csv({file_list(csv)}, all_varchar = true, union_by_name = true)
+        """)
+    return " UNION ALL BY NAME ".join(parts)
+
+
 def host_series(con, files, start, end, b):
     """Average latency, loss % and Wi-Fi stats per bucket of b seconds"""
-    file_list = "[" + ", ".join(map(sql_str, files)) + "]"
-    con.execute(f"""
-        CREATE OR REPLACE TEMP VIEW raw AS
-        SELECT * FROM read_csv({file_list}, union_by_name = true,
-                               types = {{'ts': 'TIMESTAMPTZ'}})
-    """)
+    con.execute(f"CREATE OR REPLACE TEMP VIEW raw AS {read_files(files)}")
     cols = [r[0] for r in con.execute("DESCRIBE raw").fetchall()]
     targets = [c.removesuffix("_ms") for c in cols if c.endswith("_ms")]
     extras = [c for c in ("rssi", "tx_rate") if c in cols]
 
-    # A column that never got a reply in a file is read as VARCHAR, so cast
-    aggs = [f'avg(TRY_CAST("{t}_ms" AS DOUBLE))' for t in targets]
-    aggs += [f'100 * avg((TRY_CAST("{t}_ms" AS DOUBLE) IS NULL)::int)' for t in targets]
-    aggs += [f'avg(TRY_CAST("{c}" AS DOUBLE))' for c in extras]
+    aggs = [f'avg("{t}_ms")' for t in targets]
+    aggs += [f'100 * avg(("{t}_ms" IS NULL)::int)' for t in targets]
+    aggs += [f'avg("{c}")' for c in extras]
     first = int(start) // b * b
     # Join against every bucket in the range so missing data shows as a gap
     rows = con.execute(f"""
@@ -118,7 +135,9 @@ def get_data(start, end):
 
 
 def get_outages():
-    if not any(DATA.glob("*.csv")):
+    # outages.sql reads both *.csv and *.parquet, and DuckDB errors on a glob
+    # that matches nothing
+    if not (any(DATA.glob("*.csv")) and any(DATA.glob("*.parquet"))):
         return []
     con = duckdb.connect()
     con.execute((ROOT / "outages.sql").read_text())

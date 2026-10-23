@@ -4,8 +4,9 @@ Find out where the brief internet outages come from.
 
 Every second, each monitor pings each hop on the path and does a DNS lookup,
 then appends one CSV row to `~/netmon/data/<host>-<date>.csv`. An empty field
-means no reply. CSVs older than 30 days are deleted (set `KEEP_DAYS` to
-change that). Comparing the wired Mac mini with a Wi-Fi client shows which
+means no reply. Once a day, `to_parquet.sh` converts earlier days' CSVs to
+`<host>-<date>.parquet` (about 1/6 the size) and deletes them. Data older
+than 30 days is deleted (set `KEEP_DAYS` to change that). Comparing the wired Mac mini with a Wi-Fi client shows which
 segment failed:
 
 ```
@@ -21,6 +22,11 @@ modem (Technicolor CVA4001, Spectrum) → main Deco ─┬─ TP-Link switch ─
 | no                          | yes           | mesh backhaul / Wi-Fi         |
 
 ## Monitors
+
+Each machine needs `fping` and [mise](https://mise.jdx.dev), which supplies
+the DuckDB version pinned in `mise.toml`. Run `mise trust && mise install` in
+`~/netmon` first. `to_parquet.sh` expects mise at `/opt/homebrew/bin/mise`;
+set `MISE` in the plist if it's elsewhere.
 
 Each machine has a LaunchAgent at
 `~/Library/LaunchAgents/com.llimllib.netmon.plist`; the copies here are
@@ -73,17 +79,23 @@ uses uPlot, stored in `static/` so the page works offline.
 
 ## Finding outages
 
-On the laptop:
+On the laptop (`--delete` removes the Mac mini's CSVs once it has converted
+them, so those days aren't counted twice; the filters keep it from touching
+the laptop's own files):
 
 ```
-rsync -a qfwfq.local:netmon/data/ ~/netmon/data/
-duckdb -c ".read ~/netmon/outages.sql"
+rsync -a --delete --include='qfwfq-*.csv' --include='qfwfq-*.parquet' --exclude='*' \
+  qfwfq.local:netmon/data/ ~/netmon/data/
+cd ~/netmon && duckdb -c ".read outages.sql"
 ```
+
+`outages.sql` reads both the Parquet files and today's CSVs, and needs at
+least one of each.
 
 To see the laptop's Wi-Fi around an outage:
 
 ```sql
 SELECT ts, office_ms, hallway_ms, deco_ms, rssi, channel, band, tx_rate
-FROM read_csv('~/netmon/data/adama-*.csv')
+FROM read_parquet('~/netmon/data/adama-*.parquet')
 WHERE ts BETWEEN '2026-10-12 19:00:00' AND '2026-10-12 19:05:00';
 ```

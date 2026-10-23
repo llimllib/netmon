@@ -1,4 +1,4 @@
--- List outages found in ~/netmon/data/*.csv.
+-- List outages found in ~/netmon/data (Parquet for past days, CSV for today).
 --
 --   duckdb -c ".read outages.sql"
 --
@@ -10,11 +10,18 @@
 -- they're referenced more than once; as views, every reference re-read
 -- and re-unpivoted all the CSVs.
 
+-- Cast CSV columns the way to_parquet.sh does, so both agree on types
 CREATE OR REPLACE TEMP TABLE pings AS
-SELECT regexp_extract(filename, '([^/]+)-\d{4}-\d{2}-\d{2}\.csv$', 1) AS host,
+SELECT regexp_extract(filename, '([^/]+)-\d{4}-\d{2}-\d{2}\.\w+$', 1) AS host,
        * EXCLUDE (filename)
-FROM read_csv('~/netmon/data/*.csv', union_by_name = true, filename = true,
-              types = {'ts': 'TIMESTAMPTZ'});
+FROM (
+  SELECT * FROM read_parquet('~/netmon/data/*.parquet', union_by_name = true,
+                             filename = true)
+  UNION ALL BY NAME
+  SELECT ts::TIMESTAMPTZ AS ts, COLUMNS(* EXCLUDE (ts, filename))::DOUBLE, filename
+  FROM read_csv('~/netmon/data/*.csv', all_varchar = true, union_by_name = true,
+                filename = true)
+);
 
 -- One row per host, second and target. UNPIVOT drops NULLs, so failures
 -- are stored as -1 first.
@@ -67,7 +74,8 @@ SELECT o.host,
          ELSE 'partial'
        END AS diagnosis,
        -- What the other monitors saw during the same window
-       (SELECT string_agg(DISTINCT p.host || ': ' || array_to_string(p.all_failed, '+'), ', ')
+       (SELECT string_agg(DISTINCT p.host || ': ' || array_to_string(p.all_failed, '+'), ', '
+                          ORDER BY p.host || ': ' || array_to_string(p.all_failed, '+'))
         FROM outages p
         WHERE p.host != o.host
           AND p.start <= o."end" + INTERVAL 5 SECOND

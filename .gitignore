@@ -1,3 +1,4 @@
 data/
 monitor.log
 wifistat
+__pycache__/

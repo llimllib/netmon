@@ -6,14 +6,15 @@
 #
 # Writes ~/netmon/data/<host>-<YYYY-MM-DD>.csv with columns
 #   ts, <name>_ms..., dns_ms
-# An empty field means no reply within the timeout.
+# An empty field means no reply within the timeout. Once a day, earlier
+# days' CSVs are converted to Parquet by to_parquet.sh.
 #
 # Optional environment:
 #   HOME_GW   skip rows while the default gateway is some other address
 #             (i.e. the laptop is on another network)
 #   WIFISTAT  path to the wifistat binary; adds rssi,noise,channel,band,
 #             width,tx_rate columns
-#   KEEP_DAYS delete CSVs older than this many days (default 30)
+#   KEEP_DAYS delete data older than this many days (default 30)
 
 zmodload zsh/datetime
 
@@ -61,8 +62,9 @@ while true; do
   file=$DATA_DIR/$HOST-$day.csv
   if [[ ! -s $file ]]; then
     print -r -- $header > $file
-    # Once per new file (i.e. daily), drop old data
-    rm -f $DATA_DIR/*.csv(N.m+$KEEP_DAYS)
+    # Once per new file (i.e. daily), drop old data and convert yesterday's
+    rm -f $DATA_DIR/*.(csv|parquet)(N.m+$KEEP_DAYS)
+    DATA_DIR=$DATA_DIR ${0:A:h}/to_parquet.sh &!
   fi
 
   # Run DNS check in the background while fping runs
