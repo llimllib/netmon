@@ -4,4 +4,5 @@ wifistat
 __pycache__/
 dashboard.log
 push.log
+traffic.log
 DEPLOYED

@@ -306,6 +306,186 @@
       ],
       "title": "${wifi_host:text}: Wi-Fi",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 7,
+      "panels": [],
+      "title": "Traffic (from the main Deco)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 1,
+            "spanNulls": false
+          },
+          "unit": "bps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "upload"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 8,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 0,
+          "rawQuery": true,
+          "rawSql": "-- The Deco reports kbit/s\nWITH samples AS (\n  SELECT ts, sum(down_kbps) * 1000 AS download, sum(up_kbps) * 1000 AS upload\n  FROM traffic\n  WHERE $__timeFilter(ts)\n  GROUP BY ts\n), buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, avg(download) AS download, avg(upload) AS upload\n  FROM samples\n  GROUP BY ALL\n)\nSELECT time, download, upload\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Internet throughput (upload below the axis)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 30,
+            "lineWidth": 1,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          },
+          "displayName": "${__field.labels.client}",
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "id": 9,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 0,
+          "rawQuery": true,
+          "rawSql": "-- A client missing from a sample was offline, so it counts as 0, but a\n-- bucket with no samples at all is a gap\nWITH t AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, ts, client, down_kbps\n  FROM traffic\n  WHERE $__timeFilter(ts)\n), top AS (\n  SELECT client FROM t GROUP BY client HAVING sum(down_kbps) > 0 ORDER BY sum(down_kbps) DESC LIMIT 8\n), samples AS (\n  SELECT time, count(DISTINCT ts) AS n FROM t GROUP BY time\n), buckets AS (\n  SELECT time, CASE WHEN client IN (SELECT client FROM top) THEN client ELSE 'other' END AS client,\n         sum(down_kbps) * 1000 AS total\n  FROM t\n  GROUP BY ALL\n)\nSELECT time, client, CASE WHEN n IS NOT NULL THEN coalesce(total, 0) / n END AS value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT client FROM top UNION ALL SELECT 'other')\nLEFT JOIN samples USING (time)\nLEFT JOIN buckets USING (time, client)\nORDER BY time\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Download by client (busiest 8)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "download|upload"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 1,
+          "rawQuery": true,
+          "rawSql": "SELECT client, arg_max(conn, ts) AS connection, arg_max(ip, ts) AS ip,\n       sum(down_bytes) AS download, sum(up_bytes) AS upload\nFROM traffic\nWHERE $__timeFilter(ts)\nGROUP BY client\nORDER BY download DESC\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Data used (estimated from 15s samples)",
+      "type": "table"
     }
   ],
   "refresh": "30s",

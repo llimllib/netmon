@@ -4,6 +4,7 @@
 --           past days, CSV for today.
 --   results one row per host, second and target
 --   report  outages, with a diagnosis and what the other monitors saw
+--   traffic each Deco client's traffic every 15s, from traffic.py
 --
 -- A second is "bad" if any target failed to reply. Bad seconds less than
 -- 5s apart are merged into one outage. Outages with fewer than 3 bad
@@ -115,3 +116,32 @@ SELECT o.host,
        o."end" AS end_ts
 FROM outages o
 WHERE o.bad_secs >= 3;
+
+-- What to call Deco clients on the dashboard, by MAC. Unlisted clients get
+-- the Deco's name and the end of their MAC (unless the name has it
+-- already), since names like "iPhone" repeat.
+CREATE OR REPLACE VIEW client_names AS
+SELECT * FROM (VALUES
+  ('14-98-77-35-A5-81', 'Living room Mac mini')
+) t(mac, name);
+
+-- Rates are in kbit/s. Bytes are estimated from them: traffic.py samples
+-- every 15s. traffic.py keeps an empty file of each type in
+-- data/traffic/, because a glob matching nothing would fail to create
+-- this view.
+CREATE OR REPLACE VIEW traffic AS
+SELECT t.*,
+       coalesce(n.name,
+                CASE WHEN contains(upper(replace(t.name, '-', '')), mac_end) THEN t.name
+                     ELSE t.name || ' ' || mac_end END) AS client,
+       t.down_kbps * 1000 / 8 * 15 AS down_bytes,
+       t.up_kbps * 1000 / 8 * 15 AS up_bytes
+FROM (
+  SELECT * FROM read_parquet('~/netmon/data/traffic/*.parquet', union_by_name = true)
+  UNION ALL BY NAME
+  SELECT ts::TIMESTAMPTZ AS ts, * EXCLUDE (ts, down_kbps, up_kbps),
+         down_kbps::DOUBLE AS down_kbps, up_kbps::DOUBLE AS up_kbps
+  FROM read_csv('~/netmon/data/traffic/*.csv', all_varchar = true, union_by_name = true)
+) t
+LEFT JOIN client_names n USING (mac),
+LATERAL (SELECT replace(right(t.mac, 5), '-', '') AS mac_end);
