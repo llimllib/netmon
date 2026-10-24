@@ -4,7 +4,12 @@
 --           past days, CSV for today.
 --   results one row per host, second and target
 --   report  outages, with a diagnosis and what the other monitors saw
---   traffic each Deco client's traffic every 15s, from traffic.py
+--   traffic     each Deco client's traffic, and which Deco it's on, every
+--               15s, from deco.py
+--   deco_nodes  each Deco's parent, backhaul signal and internet status,
+--               every 15s
+--   deco_wan    the main Deco's WAN link, DHCP state and address, every 15s
+--   deco_log    the main Deco's system log
 --
 -- A second is "bad" if any target failed to reply. Bad seconds less than
 -- 5s apart are merged into one outage. Outages with fewer than 3 bad
@@ -125,10 +130,10 @@ SELECT * FROM (VALUES
   ('14-98-77-35-A5-81', 'Living room Mac mini')
 ) t(mac, name);
 
--- Rates are in kbit/s. Bytes are estimated from them: traffic.py samples
--- every 15s. traffic.py keeps an empty file of each type in
--- data/traffic/, because a glob matching nothing would fail to create
--- this view.
+-- Rates are in kbit/s. Bytes are estimated from them: deco.py samples
+-- every 15s. deco.py keeps an empty file of each type in each of its
+-- tables' directories, because a glob matching nothing would fail to
+-- create these views.
 CREATE OR REPLACE VIEW traffic AS
 SELECT t.*,
        coalesce(n.name,
@@ -145,3 +150,27 @@ FROM (
 ) t
 LEFT JOIN client_names n USING (mac),
 LATERAL (SELECT replace(right(t.mac, 5), '-', '') AS mac_end);
+
+-- Signal levels are the Deco app's bars, 0-3 or so. backhaul lists the
+-- bands a satellite's backhaul can use.
+CREATE OR REPLACE VIEW deco_nodes AS
+SELECT * FROM read_parquet('~/netmon/data/deco_nodes/*.parquet', union_by_name = true)
+UNION ALL BY NAME
+SELECT ts::TIMESTAMPTZ AS ts, * EXCLUDE (ts, signal_2g, signal_5g, signal_6g),
+       signal_2g::INTEGER AS signal_2g, signal_5g::INTEGER AS signal_5g,
+       signal_6g::INTEGER AS signal_6g
+FROM read_csv('~/netmon/data/deco_nodes/*.csv', all_varchar = true, union_by_name = true);
+
+-- Normally link 'plugged', dial 'connected', inet 'online'
+CREATE OR REPLACE VIEW deco_wan AS
+SELECT * FROM read_parquet('~/netmon/data/deco_wan/*.parquet', union_by_name = true)
+UNION ALL BY NAME
+SELECT ts::TIMESTAMPTZ AS ts, * EXCLUDE (ts, error_code), error_code::INTEGER AS error_code
+FROM read_csv('~/netmon/data/deco_wan/*.csv', all_varchar = true, union_by_name = true);
+
+-- Most lines are from nrd, the mesh's client steering, which is noisy
+CREATE OR REPLACE VIEW deco_log AS
+SELECT * FROM read_parquet('~/netmon/data/deco_log/*.parquet', union_by_name = true)
+UNION ALL BY NAME
+SELECT ts::TIMESTAMPTZ AS ts, * EXCLUDE (ts, pid), pid::INTEGER AS pid
+FROM read_csv('~/netmon/data/deco_log/*.csv', all_varchar = true, union_by_name = true);

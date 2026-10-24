@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.llimllib.netmon.traffic</string>
+  <string>com.llimllib.netmon.deco</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/mise</string>
@@ -14,15 +14,15 @@
     <string>uv</string>
     <string>run</string>
     <string>--quiet</string>
-    <string>/Users/llimllib/netmon/traffic.py</string>
+    <string>/Users/llimllib/netmon/deco.py</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/Users/llimllib/netmon/traffic.log</string>
+  <string>/Users/llimllib/netmon/deco.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/llimllib/netmon/traffic.log</string>
+  <string>/Users/llimllib/netmon/deco.log</string>
 </dict>
 </plist>

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Set up qfwfq: the wired monitor, the Deco traffic collector, and Grafana
+# Set up qfwfq: the wired monitor, the Deco collector, and Grafana
 # at http://qfwfq.local:3000.
 # deploy.sh copies the repo to ~/netmon and runs this there.
 set -euo pipefail
@@ -31,10 +31,10 @@ install_plugin() {
 
 install_tools
 install_agent com.llimllib.netmon.qfwfq.plist com.llimllib.netmon
-# Installs traffic.py's dependencies, and creates the files views.sql needs
+# Installs deco.py's dependencies, and creates the files views.sql needs
 # before Grafana loads it
-mise exec -- uv run --quiet traffic.py --init
-install_agent com.llimllib.netmon.traffic.plist com.llimllib.netmon.traffic
+mise exec -- uv run --quiet deco.py --init
+install_agent com.llimllib.netmon.deco.plist com.llimllib.netmon.deco
 
 if ! brew list --formula grafana &>/dev/null; then
   echo "grafana: installing"

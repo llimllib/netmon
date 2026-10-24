@@ -33,7 +33,7 @@ laptop. It's safe to rerun, and restarts what it installs:
 
 - **qfwfq** gets the committed tree (`git archive HEAD`, so commit first) in
   `~/netmon`, with the commit in `~/netmon/DEPLOYED`. `deploy/qfwfq.sh`
-  installs its monitor, the [traffic](#traffic) collector and Grafana.
+  installs its monitor, the [Deco](#the-deco) collector and Grafana.
 - **adama** runs from this checkout. `deploy/adama.sh` installs its monitor,
   `push.sh` (copies its data to qfwfq every 30s, for Grafana) and the local
   dashboard.
@@ -53,7 +53,7 @@ launchctl bootout gui/$(id -u)/<label>        # stop until the next deploy
 | `com.llimllib.netmon`           | both    | the monitor             | `~/netmon/monitor.log`    |
 | `com.llimllib.netmon.push`      | adama   | `push.sh`               | `~/netmon/push.log`       |
 | `com.llimllib.netmon.dashboard` | adama   | `dashboard.py`          | `~/netmon/dashboard.log`  |
-| `com.llimllib.netmon.traffic`   | qfwfq   | `traffic.py`            | `~/netmon/traffic.log`    |
+| `com.llimllib.netmon.deco`      | qfwfq   | `deco.py`               | `~/netmon/deco.log`       |
 | `sh.brew.grafana`               | qfwfq   | Grafana (`brew services`) | `/opt/homebrew/var/log/grafana/grafana.log` |
 
 ## Monitors
@@ -87,8 +87,8 @@ it, `isp_gw` will fail constantly. Update the plists if that happens.
 ## Grafana
 
 http://qfwfq.local:3000 has the netmon dashboard: outages, then latency and
-loss for each monitor, the laptop's Wi-Fi, and [traffic](#traffic). Outages are also drawn on the
-charts, and clicking an outage's start time zooms in on it. Viewing doesn't
+loss for each monitor, the laptop's Wi-Fi, and [the Deco's data](#the-deco).
+Outages are also drawn on the charts, and clicking an outage's start time zooms in on it. Viewing doesn't
 need a login. The admin password is in the laptop's keychain:
 
 ```
@@ -109,31 +109,45 @@ It's all set up from `grafana/` by `deploy/qfwfq.sh`:
 
 [plugin]: https://github.com/motherduckdb/grafana-duckdb-datasource
 
-## Traffic
+## The Deco
 
-`traffic.py` on qfwfq records how much each device on the network is
-downloading and uploading. Every 15s it asks the main Deco for its client
-list, which includes each client's current rates, and appends one row per
-online client to `~/netmon/data/traffic/<date>.csv`. Earlier days become
-Parquet, and data older than 30 days is deleted, as with the monitors'
-data.
+`deco.py` on qfwfq records what the main Deco reports. Every 15s it asks
+the Deco for:
+
+- each client's download and upload rates, and which Deco it's on
+- each Deco's upstream Deco, backhaul signal, and internet status
+- the WAN link, DHCP state and address
+
+It also copies new lines from the Deco's system log, which only holds an
+hour or two. Each goes in its own table under `~/netmon/data/` (`traffic`,
+`deco_nodes`, `deco_wan` and `deco_log`), a CSV per day. Earlier days
+become Parquet, and data older than 30 days is deleted, as with the
+monitors' data.
 
 The Deco doesn't do SNMP, so this uses the undocumented, encrypted API
 behind its web UI. How that works, and how it was worked out, is in
-[the design](docs/plans/2026-10-23-router-traffic-design.md). If a
-firmware update changes the API, `traffic.log` shows errors and the
-traffic panels go empty. Nothing else depends on it.
+[the traffic design](docs/plans/2026-10-23-router-traffic-design.md) and
+[the mesh, WAN and log design](docs/plans/2026-10-23-deco-mesh-wan-log-design.md).
+If a firmware update changes the API, `deco.log` shows errors and the
+Deco's panels go empty. Nothing else depends on it.
+
+The Deco allows one login at a time, so opening its web UI at
+http://192.168.68.1 and `deco.py` log each other out. `deco.py` logs back
+in on its next poll; the web UI has to be reloaded. The phone app isn't
+affected.
 
 It logs in with your TP-Link ID password, kept in qfwfq's keychain. To set
-or change it, run this on qfwfq, then restart the collector:
+or change it, run this on qfwfq, then restart `deco.py`:
 
 ```
 security add-generic-password -U -s netmon-deco -a admin -w
 ```
 
 Over SSH, run `security unlock-keychain` first. If the Deco rejects the
-password, the collector waits an hour before trying again, because
-repeated failures lock logins.
+password, `deco.py` waits an hour before trying again, because repeated
+failures lock logins.
+
+### Traffic
 
 The dashboard's Traffic row shows total throughput, download per client,
 and estimated data used per client. They are estimates, made by multiplying
@@ -142,8 +156,8 @@ Deco's rates are about 5% higher than what applications see, because it
 counts protocol overhead. The Decos' own traffic isn't included.
 
 `views.sql` has the data as `traffic`, with rates in kbit/s, a `client`
-display name, and `down_bytes`/`up_bytes` estimates. For example, the past
-day's downloads:
+display name, the `deco` the client is on, and `down_bytes`/`up_bytes`
+estimates. For example, the past day's downloads:
 
 ```sql
 SELECT client, sum(down_bytes) / 1e9 AS gb_down
@@ -155,6 +169,30 @@ GROUP BY client ORDER BY gb_down DESC;
 Several devices share names like "iPhone", so devices without a name in
 `client_names` (in `views.sql`) are shown with the end of their MAC. Add
 them there to name them.
+
+### Mesh, WAN and log
+
+The dashboard's "Mesh and WAN" row shows:
+
+- whether the main Deco thinks its internet connection is up
+- the satellites' backhaul signal, in the Deco app's bars
+- which Deco each Wi-Fi client is on
+- the Deco's log
+
+The connection and signal charts show the worst value in each time bucket,
+so brief problems still show when zoomed out. If an outage starts while the
+Deco says its internet is fine, the problem is beyond it; if the laptop's
+outages line up with it switching Decos or a dip in backhaul signal, it's
+the mesh.
+
+The log panel leaves out `nrd`, the mesh's client steering, which writes
+three-quarters of the lines. `deco_log` has all of them:
+
+```sql
+SELECT ts, process, message FROM deco_log
+WHERE ts BETWEEN '2026-10-23 19:00' AND '2026-10-23 19:05' AND process != 'nrd'
+ORDER BY ts;
+```
 
 ## Dashboard
 

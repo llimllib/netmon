@@ -486,6 +486,302 @@
       ],
       "title": "Data used (estimated from 15s samples)",
       "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 11,
+      "panels": [],
+      "title": "Mesh and WAN (from the main Deco)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "lineWidth": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "WAN cable"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "plugged": {
+                        "color": "green",
+                        "index": 0
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DHCP"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "connected": {
+                        "color": "green",
+                        "index": 0
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "internet"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "online": {
+                        "color": "green",
+                        "index": 0
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "WAN IP"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "palette-classic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 49
+      },
+      "id": 12,
+      "interval": "15s",
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 1,
+          "rawQuery": true,
+          "rawSql": "-- Each bucket shows the worst state in it, so short drops aren't averaged away\nWITH buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time,\n         coalesce(max(link) FILTER (WHERE link != 'plugged'), 'plugged') AS \"WAN cable\",\n         coalesce(max(dial) FILTER (WHERE dial != 'connected'), 'connected') AS \"DHCP\",\n         coalesce(max(inet) FILTER (WHERE inet != 'online'), 'online') AS \"internet\",\n         string_agg(DISTINCT ip, ', ' ORDER BY ip) AS \"WAN IP\"\n  FROM deco_wan\n  WHERE $__timeFilter(ts)\n  GROUP BY ALL\n)\nSELECT time, \"WAN cable\", \"DHCP\", \"internet\", \"WAN IP\"\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nLEFT JOIN buckets USING (time)\nORDER BY time\n",
+          "refId": "A"
+        }
+      ],
+      "title": "The main Deco's internet connection, as it sees it",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 0,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "spanNulls": false
+          },
+          "decimals": 0,
+          "displayName": "${__field.labels.series}",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 55
+      },
+      "id": 13,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 0,
+          "rawQuery": true,
+          "rawSql": "-- The weakest signal in each bucket, so dips show when zoomed out\nWITH signals AS (\n  UNPIVOT (SELECT ts, name, signal_5g AS \"5 GHz\", signal_6g AS \"6 GHz\"\n           FROM deco_nodes\n           WHERE role != 'master' AND $__timeFilter(ts))\n  ON \"5 GHz\", \"6 GHz\" INTO NAME band VALUE signal\n), buckets AS (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, name || ' ' || band AS series, min(signal) AS value\n  FROM signals\n  GROUP BY ALL\n)\nSELECT time, series, value\nFROM range(time_bucket(to_milliseconds($__interval_ms), $__timeFrom::TIMESTAMPTZ), $__timeTo::TIMESTAMPTZ, to_milliseconds($__interval_ms)) r(time)\nCROSS JOIN (SELECT DISTINCT series FROM buckets)\nLEFT JOIN buckets USING (time, series)\nORDER BY time\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Satellites' backhaul signal (Deco app bars)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 55
+      },
+      "id": 14,
+      "interval": "15s",
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 1,
+          "rawQuery": true,
+          "rawSql": "-- One column per Wi-Fi client, holding the Deco it was last on in each bucket\nPIVOT (\n  SELECT time_bucket(to_milliseconds($__interval_ms), ts) AS time, client, arg_max(deco, ts) AS deco\n  FROM traffic\n  WHERE $__timeFilter(ts) AND conn != 'wired' AND coalesce(deco, '') != ''\n  GROUP BY ALL\n) ON client USING any_value(deco) GROUP BY time ORDER BY time\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Which Deco each Wi-Fi client is on",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "motherduck-duckdb-datasource",
+        "uid": "netmon"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 63
+      },
+      "id": 15,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "motherduck-duckdb-datasource",
+            "uid": "netmon"
+          },
+          "editorMode": "code",
+          "format": 1,
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS time, process, severity, message\nFROM deco_log\nWHERE $__timeFilter(ts) AND process != 'nrd'\nORDER BY ts DESC\nLIMIT 1000\n",
+          "refId": "A"
+        }
+      ],
+      "title": "The main Deco's log, newest first (without nrd's mesh steering noise)",
+      "type": "table"
     }
   ],
   "refresh": "30s",
