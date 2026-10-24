@@ -124,10 +124,13 @@ WHERE o.bad_secs >= 3;
 
 -- What to call Deco clients on the dashboard, by MAC. Unlisted clients get
 -- the Deco's name and the end of their MAC (unless the name has it
--- already), since names like "iPhone" repeat.
+-- already), since names like "iPhone" repeat. The Deco's names can change
+-- (it calls the laptop "adama" and "Mac"), which splits a device's series.
 CREATE OR REPLACE VIEW client_names AS
 SELECT * FROM (VALUES
-  ('14-98-77-35-A5-81', 'Living room Mac mini')
+  ('14-98-77-35-A5-81', 'Living room Mac mini'),
+  -- Its Wi-Fi address on this network; macOS uses a private one per network
+  ('9E-9C-7D-CE-2E-F1', 'Laptop')
 ) t(mac, name);
 
 -- Rates are in kbit/s. Bytes are estimated from them: deco.py samples
