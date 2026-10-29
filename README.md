@@ -81,6 +81,10 @@ launchctl bootout gui/$(id -u)/<label>        # stop until the next deploy
   `hallway_ms` becomes larger than `deco_ms`, Office is probably connecting
   straight to the main Deco.
 
+  Spikes every ~10s on every target, Office included, while qfwfq is fine,
+  are probably the laptop's radio leaving the channel for AWDL. See
+  [the note on it](docs/2026-10-28-awdl-latency.md).
+
 `isp_gw` (142.254.209.201) is the second traceroute hop. If Spectrum changes
 it, `isp_gw` will fail constantly. Update the plists if that happens.
 
